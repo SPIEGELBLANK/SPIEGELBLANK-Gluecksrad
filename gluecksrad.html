@@ -1,0 +1,232 @@
+<!--
+Glücksrad (CodePen-ready)
+Anleitung: Kopiere den gesamten Inhalt dieses Dokuments in das HTML-Feld von CodePen.
+-->
+
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Glücksrad - CodePen</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --size: 420px;
+    }
+    body{font-family: 'Roboto', system-ui, Arial, sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; background:#f6f7fb;}
+    .wrap{display:grid; gap:18px; grid-template-columns: 1fr; align-items:start; text-align:center;}
+    .headline{font-family:'Roboto', sans-serif; color:#003660; font-size:20px; font-weight:bold; margin-bottom:10px;}
+    .wheel-area{position:relative; width:var(--size); height:var(--size); margin:0 auto;}
+    canvas#wheel{width:100%; height:100%; border-radius:50%; display:block; transition: transform 5s cubic-bezier(.12,.85,.28,1);}
+    .pointer{position:absolute; left:50%; top:-14px; transform:translateX(-50%); width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:24px solid #e63946; filter:drop-shadow(0 2px 2px rgba(0,0,0,0.15));}
+    .center{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none; text-align:center; color:#003660; font-weight:bold; font-family: 'Roboto', sans-serif; white-space:pre-line; font-size:12px;}
+    .controls{display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
+    button{background:#2b2df4;color:#fff;border:none;padding:12px 18px;border-radius:10px;font-weight:600;cursor:pointer;box-shadow: 0 6px 18px rgba(43,45,244,0.18);} 
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .result{font-size:18px;text-align:center;padding:8px 12px;color:#222}
+    .small{font-size:13px;color:#556}
+    .settings{max-width:420px;margin:0 auto;text-align:center}
+    @media (max-width:480px){:root{--size:320px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="headline">Dein SPIEGELBLANK-GLÜCKSMOMENT</div>
+    <div class="wheel-area">
+      <div class="pointer" aria-hidden="true"></div>
+      <canvas id="wheel" width="420" height="420" role="img" aria-label="Glücksrad"></canvas>
+      <div class="center" aria-hidden="true">SPIEGELBLANK</div>
+    </div>
+
+    <div class="controls">
+      <button id="spinBtn">DREHEN</button>
+    </div>
+
+    <div class="settings">
+      <div class="result" id="result">NOCH NICHT GEDREHT.</div>
+      <div class="small">Textfarbe und Schriftart wurden angepasst. Blaues Konfetti bei Großgewinn aktiviert.</div>
+    </div>
+  </div>
+
+  <script>
+    const segments = [
+      'KLEINGEWINN',
+      'LEIDER NICHT GEWONNEN',
+      'GROßGEWINN',
+      'DREH NOCHMAL!',
+      'KLEINGEWINN',
+      'LEIDER NICHT GEWONNEN',
+      'GROßGEWINN',
+      'DREH NOCHMAL!'
+    ];
+
+    const colors = ['#003660', '#fdc300', '#009ee3'];
+
+    const canvas = document.getElementById('wheel');
+    const ctx = canvas.getContext('2d');
+    const spinBtn = document.getElementById('spinBtn');
+    const resultEl = document.getElementById('result');
+    const size = canvas.width;
+    const center = size / 2;
+    const radius = center - 6;
+
+    let currentRotation = 0;
+    let spinning = false;
+
+    function drawWheel(){
+      const segCount = segments.length;
+      const angle = (2*Math.PI) / segCount;
+      ctx.clearRect(0,0,size,size);
+      ctx.save();
+      ctx.translate(center, center);
+
+      for(let i=0;i<segCount;i++){
+        const start = i*angle;
+        const end = start + angle;
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.arc(0,0,radius,start,end);
+        ctx.closePath();
+        const color = colors[i % colors.length];
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        let textColor = (color.toLowerCase() === '#fdc300') ? '#003660' : getContrastYIQ(color);
+
+        ctx.save();
+        ctx.rotate(start + angle/2);
+        ctx.translate(radius*0.65,0);
+        ctx.rotate(Math.PI/2);
+        ctx.fillStyle = textColor;
+        ctx.font = 'bold 14px Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        wrapText(ctx, segments[i], 0, 0, 110, 16);
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.fillStyle = '#ffffff';
+      ctx.arc(0,0,48,0,2*Math.PI);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function getContrastYIQ(hexcolor){
+      hexcolor = hexcolor.replace('#','');
+      const r = parseInt(hexcolor.substr(0,2),16);
+      const g = parseInt(hexcolor.substr(2,2),16);
+      const b = parseInt(hexcolor.substr(4,2),16);
+      const yiq = ((r*299)+(g*587)+(b*114))/1000;
+      return (yiq >= 128) ? '#000' : '#fff';
+    }
+
+    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+      const words = text.split(' ');
+      let line = '';
+      let lines = [];
+      for(let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        const testWidth = metrics.width;
+        if (testWidth > maxWidth && n > 0) {
+          lines.push(line);
+          line = words[n] + ' ';
+        } else {
+          line = testLine;
+        }
+      }
+      lines.push(line);
+      const totalHeight = lines.length * lineHeight;
+      let offsetY = - totalHeight/2 + (lineHeight/2);
+      for(let i=0;i<lines.length;i++){
+        ctx.fillText(lines[i].trim(), x, y + offsetY + i*lineHeight);
+      }
+    }
+
+    function applyRotation(deg){ canvas.style.transform = `rotate(${deg}deg)`; }
+
+    function getSegmentFromRotation(finalDeg){
+      const normalized = (360 - (finalDeg % 360) + 90) % 360;
+      const segAngle = 360 / segments.length;
+      const index = Math.floor(normalized / segAngle) % segments.length;
+      return index;
+    }
+
+    function spin(extras = 5){
+      if(spinning) return;
+      spinning = true;
+      spinBtn.disabled = true;
+
+      const fullTurns = extras;
+      const randomOffset = Math.random() * 360;
+      const target = fullTurns*360 + randomOffset;
+      const end = currentRotation + target;
+
+      canvas.style.transition = 'transform 5s cubic-bezier(.12,.85,.28,1)';
+      requestAnimationFrame(()=> applyRotation(end));
+
+      canvas.addEventListener('transitionend', function handler(){
+        canvas.style.transition = '';
+        currentRotation = end % 360;
+        const winnerIndex = getSegmentFromRotation(currentRotation);
+        showResult(winnerIndex);
+        if(segments[winnerIndex] === 'GROßGEWINN') triggerConfetti();
+        spinBtn.disabled = false;
+        spinning = false;
+        canvas.removeEventListener('transitionend', handler);
+      });
+    }
+
+    function showResult(index){
+      const prize = segments[index];
+      resultEl.textContent = `GEWINNER: ${prize}`;
+      resultEl.style.fontWeight = '700';
+      setTimeout(()=>{ resultEl.style.fontWeight = '400'; }, 1800);
+    }
+
+    function triggerConfetti(){
+      const confettiCount = 50;
+      for(let i=0;i<confettiCount;i++){
+        const confetti = document.createElement('div');
+        confetti.style.position = 'absolute';
+        confetti.style.width = '8px';
+        confetti.style.height = '8px';
+        confetti.style.backgroundColor = '#009ee3';
+        confetti.style.top = `${center}px`;
+        confetti.style.left = `${center}px`;
+        confetti.style.borderRadius = '50%';
+        confetti.style.pointerEvents = 'none';
+        confetti.style.zIndex = '9999';
+        document.body.appendChild(confetti);
+
+        const angle = Math.random() * 2 * Math.PI;
+        const radiusMove = Math.random() * 150 + 50;
+        const duration = Math.random() * 1000 + 800;
+
+        confetti.animate([
+          { transform: `translate(0,0)`, opacity:1 },
+          { transform: `translate(${Math.cos(angle)*radiusMove}px, ${Math.sin(angle)*radiusMove}px)`, opacity:0 }
+        ], { duration: duration, easing: 'ease-out', fill: 'forwards' });
+
+        setTimeout(()=>{ document.body.removeChild(confetti); }, duration);
+      }
+    }
+
+    drawWheel();
+    applyRotation(0);
+
+    spinBtn.addEventListener('click', ()=>spin(6));
+
+    window.addEventListener('load', ()=>{
+      const dpr = window.devicePixelRatio || 1;
+      const bounding = canvas.getBoundingClientRect();
+      canvas.width = Math.round(bounding.width * dpr);
+      canvas.height = Math.round(bounding.height * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      drawWheel();
+    });
+  </script>
+</body>
+</html>
